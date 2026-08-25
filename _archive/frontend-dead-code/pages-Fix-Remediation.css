@@ -1,0 +1,52 @@
+.rem-page { min-height: 100vh; padding: 40px; background: #0A0E17; color: #E8ECF5; font-family: 'Inter', sans-serif; }
+.rem-box { max-width: 760px; margin: auto; }
+.rem-back { display: flex; align-items: center; gap: 8px; background: none; border: none; color: #7E88A6; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 20px; padding: 0; }
+.rem-back:hover { color: #E8ECF5; }
+.rem-loading, .rem-error { padding: 20px; border-radius: 12px; background: rgba(255,255,255,0.03); color: #7E88A6; }
+.rem-error { background: rgba(240,85,75,0.1); border: 1px solid rgba(240,85,75,0.3); color: #F0554B; }
+.rem-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #5B8DEF; margin: 0 0 6px; }
+.rem-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.rem-severity { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); padding: 4px 10px; border-radius: 99px; }
+.rem-target { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #7E88A6; }
+.rem-resolved-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #3DD68C; background: rgba(61,214,140,0.1); border: 1px solid rgba(61,214,140,0.3); padding: 4px 10px; border-radius: 99px; }
+.rem-box h1 { font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; margin: 4px 0 12px; }
+.rem-description { color: #A8B0C4; font-size: 14.5px; line-height: 1.6; margin-bottom: 22px; }
+.rem-card { background: #131A2B; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+.rem-card h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #7E88A6; text-transform: uppercase; letter-spacing: 0.3px; margin: 0 0 14px; }
+.rem-evidence { display: flex; flex-direction: column; gap: 8px; }
+.rem-evidence-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.rem-evidence-key { color: #7E88A6; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+.rem-evidence-value { color: #E8ECF5; text-align: right; word-break: break-word; }
+.rem-recommendation { border-color: rgba(91,141,239,0.3); background: linear-gradient(180deg, rgba(91,141,239,0.06), #131A2B); }
+.rem-recommendation h3 { color: #5B8DEF; }
+.rem-recommendation p { font-size: 14.5px; line-height: 1.65; color: #E8ECF5; margin: 0 0 16px; }
+.rem-empty { color: #7E88A6; font-style: italic; }
+.rem-example { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #0A0E17; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.rem-example code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #3DD68C; word-break: break-word; }
+.rem-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.rem-tab { background: none; border: 1px solid rgba(255,255,255,0.1); color: #7E88A6; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 99px; cursor: pointer; }
+.rem-tab.active { color: #5B8DEF; border-color: #5B8DEF; background: rgba(91,141,239,0.1); }
+.rem-snippet-block { position: relative; background: #0A0E17; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.rem-snippet-block pre { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #E8ECF5; white-space: pre-wrap; word-break: break-word; padding-right: 90px; }
+.rem-snippet-block .rem-copy-btn { position: absolute; top: 12px; right: 12px; }
+.rem-copy-btn { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #E8ECF5; font-size: 11.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; flex-shrink: 0; }
+.rem-copy-btn:hover { border-color: #5B8DEF; color: #5B8DEF; }
+.rem-disclaimer { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #7E88A6; line-height: 1.5; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+.rem-disclaimer svg { flex-shrink: 0; margin-top: 2px; color: #3DD68C; }
+.rem-verify h3 { color: #F2A65A; }
+.rem-verify-copy { font-size: 13.5px; color: #A8B0C4; line-height: 1.6; margin: 0 0 14px; }
+.rem-verify-btn, .rem-resolve-btn { display: flex; align-items: center; gap: 8px; background: linear-gradient(135deg,#5B8DEF,#7C6CF0); color: white; border: none; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 10px; cursor: pointer; }
+.rem-resolve-btn { background: linear-gradient(135deg,#3DD68C,#2fb977); }
+.rem-verify-progress { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: #F2A65A; }
+.rem-spin { animation: rem-spin-anim 1s linear infinite; }
+@keyframes rem-spin-anim { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.rem-verify-result { display: flex; flex-direction: column; gap: 8px; }
+.rem-verify-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.rem-before { display: inline-flex; align-items: center; gap: 6px; color: #F0554B; font-weight: 600; }
+.rem-after { display: inline-flex; align-items: center; gap: 6px; color: #3DD68C; font-weight: 600; }
+.rem-status-tag { display: inline-block; align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; padding: 5px 12px; border-radius: 99px; margin: 8px 0; }
+.rem-status-tag.ok { color: #3DD68C; background: rgba(61,214,140,0.12); border: 1px solid rgba(61,214,140,0.3); }
+.rem-status-tag.warn { color: #F2A65A; background: rgba(242,166,90,0.12); border: 1px solid rgba(242,166,90,0.3); }
+.rem-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.rem-view-scan { display: flex; align-items: center; gap: 8px; background: none; border: 1px solid rgba(255,255,255,0.12); color: #E8ECF5; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 10px; cursor: pointer; }
+.rem-view-scan:hover { border-color: #5B8DEF; color: #5B8DEF; }

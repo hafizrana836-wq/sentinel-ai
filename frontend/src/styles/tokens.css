@@ -1,0 +1,96 @@
+/* ============================================================
+   tokens.css — Sentinel AI shared design system
+   Import this FIRST in every page CSS (or globally in index.css):
+     @import "../../styles/tokens.css";
+   Values match the existing Dashboard/Landing dark-navy + signal-blue
+   language. Reports/Settings already used these numbers inline —
+   this file just gives them names so every page stays in sync.
+   ============================================================ */
+
+:root {
+  /* Surfaces */
+  --sn-bg: #0A0E17;
+  --sn-bg-glow: radial-gradient(circle at top, rgba(91, 141, 239, 0.10) 0%, #0A0E17 55%);
+  --sn-surface: #131A2B;
+  --sn-surface-2: #0F1523;
+  --sn-surface-inset: #0A0E17;
+
+  /* Borders */
+  --sn-border: rgba(255, 255, 255, 0.07);
+  --sn-border-strong: rgba(255, 255, 255, 0.14);
+  --sn-border-accent: rgba(91, 141, 239, 0.3);
+
+  /* Text */
+  --sn-text: #E8ECF5;
+  --sn-text-dim: #7E88A6;
+  --sn-text-faint: #4E5872;
+
+  /* Brand */
+  --sn-accent: #5B8DEF;
+  --sn-accent-2: #7C6CF0;
+  --sn-accent-gradient: linear-gradient(135deg, var(--sn-accent), var(--sn-accent-2));
+  --sn-accent-wash: rgba(91, 141, 239, 0.10);
+
+  /* Severity / status */
+  --sn-success: #3DD68C;
+  --sn-success-wash: rgba(61, 214, 140, 0.12);
+  --sn-warning: #F2A65A;
+  --sn-warning-wash: rgba(242, 166, 90, 0.12);
+  --sn-danger: #F0554B;
+  --sn-danger-wash: rgba(240, 85, 75, 0.12);
+  --sn-neutral: #7E88A6;
+  --sn-neutral-wash: rgba(126, 136, 166, 0.12);
+
+  /* Radius */
+  --sn-radius-sm: 8px;
+  --sn-radius-md: 12px;
+  --sn-radius-lg: 16px;
+  --sn-radius-xl: 20px;
+  --sn-radius-pill: 999px;
+
+  /* Elevation */
+  --sn-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.55);
+  --sn-shadow-hover: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -16px rgba(0, 0, 0, 0.6);
+  --sn-shadow-glow: 0 0 0 1px rgba(91, 141, 239, 0.18), 0 8px 24px -8px rgba(91, 141, 239, 0.3);
+
+  /* Typography */
+  --sn-font-display: 'Space Grotesk', sans-serif;
+  --sn-font-body: 'Inter', sans-serif;
+  --sn-font-mono: 'JetBrains Mono', monospace;
+
+  /* Motion */
+  --sn-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --sn-transition: 180ms var(--sn-ease);
+  --sn-transition-slow: 320ms var(--sn-ease);
+}
+
+/* Shared shimmer keyframe — page-specific classes (.rep-skel, .api-skel etc.)
+   all point at this one animation so timing stays identical everywhere. */
+@keyframes sn-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.sn-skel {
+  display: inline-block;
+  border-radius: var(--sn-radius-sm);
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.14) 37%, rgba(255,255,255,0.06) 63%);
+  background-size: 400% 100%;
+  animation: sn-shimmer 1.4s ease infinite;
+}
+
+/* Shared severity pill — grade/risk/status badges across all pages
+   use this same visual pattern: colored text + tinted background,
+   color driven by the --c custom property set inline per instance. */
+.sn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--c, var(--sn-neutral));
+  background: color-mix(in srgb, var(--c, var(--sn-neutral)) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c, var(--sn-neutral)) 35%, transparent);
+  padding: 3px 10px;
+  border-radius: var(--sn-radius-pill);
+}

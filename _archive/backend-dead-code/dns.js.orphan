@@ -1,0 +1,58 @@
+const dns = require("dns").promises;
+
+function normalizeTarget(target) {
+
+    target = target.trim();
+
+    if (
+        !target.startsWith("http://") &&
+        !target.startsWith("https://")
+    ) {
+
+        target = "https://" + target;
+
+    }
+
+    return target;
+
+}
+
+async function checkDNS(target) {
+
+    try {
+
+        const hostname = new URL(target).hostname;
+
+        await dns.lookup(hostname);
+
+        return {
+
+            success: true,
+
+            hostname
+
+        };
+
+    }
+
+    catch {
+
+        return {
+
+            success: false,
+
+            hostname: null
+
+        };
+
+    }
+
+}
+
+module.exports = {
+
+    normalizeTarget,
+
+    checkDNS
+
+};

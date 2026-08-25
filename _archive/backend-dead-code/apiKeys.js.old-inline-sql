@@ -1,0 +1,220 @@
+const express = require("express");
+const crypto = require("crypto");
+const router = express.Router();
+const pool = require("../config/db");
+const { requireAuth } = require("../middleware/auth");
+
+// ===== Create a new API key =====
+router.post("/", requireAuth, async (req, res) => {
+    try {
+        const { name } = req.body;
+        const keyValue = "sk_" + crypto.randomBytes(24).toString("hex");
+
+        const result = await pool.query(
+            `INSERT INTO api_keys (user_id, key_value, name)
+             VALUES ($1, $2, $3) RETURNING *`,
+            [req.user.id, keyValue, name || "My API Key"]
+        );
+
+        res.json({
+            success: true,
+            apiKey: result.rows[0]
+        });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to create API key"
+        });
+    }
+});
+
+// ===== List user's API keys (with usage stats) =====
+router.get("/", requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, key_value, name, active, created_at, last_used_at,
+                    daily_limit, requests_today, requests_today_date,
+                    requests_month, requests_month_ym, total_requests
+             FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`,
+            [req.user.id]
+        );
+
+        const today = new Date().toISOString().split("T")[0];
+        const month = new Date().toISOString().slice(0, 7);
+
+        const keys = result.rows.map((k) => {
+            const requestsToday =
+                k.requests_today_date?.toISOString().split("T")[0] === today
+                    ? k.requests_today
+                    : 0;
+            const requestsMonth =
+                k.requests_month_ym === month ? k.requests_month : 0;
+
+            return {
+                ...k,
+                requests_today: requestsToday,
+                requests_month: requestsMonth,
+                remaining_today: Math.max(0, k.daily_limit - requestsToday)
+            };
+        });
+
+        res.json({
+            success: true,
+            keys
+        });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch API keys"
+        });
+    }
+});
+
+// ===== Revoke (delete) an API key =====
+router.delete("/:id", requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `DELETE FROM api_keys WHERE id = $1 AND user_id = $2 RETURNING id`,
+            [req.params.id, req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "API key not found"
+            });
+        }
+
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete API key"
+        });
+    }
+});
+
+// ===== Toggle active/inactive (Pause / Resume) =====
+router.patch("/:id/toggle", requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `UPDATE api_keys SET active = NOT active WHERE id = $1 AND user_id = $2 RETURNING *`,
+            [req.params.id, req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "API key not found"
+            });
+        }
+
+        res.json({ success: true, apiKey: result.rows[0] });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update API key"
+        });
+    }
+});
+
+// ===== Regenerate a key (new value, same record, resets limits) =====
+router.patch("/:id/regenerate", requireAuth, async (req, res) => {
+    try {
+        const newKeyValue = "sk_" + crypto.randomBytes(24).toString("hex");
+
+        const result = await pool.query(
+            `UPDATE api_keys
+             SET key_value = $1, active = TRUE, limit_exceeded_count = 0,
+                 requests_today = 0, requests_month = 0
+             WHERE id = $2 AND user_id = $3 RETURNING *`,
+            [newKeyValue, req.params.id, req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "API key not found"
+            });
+        }
+
+        res.json({ success: true, apiKey: result.rows[0] });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to regenerate API key"
+        });
+    }
+});
+
+// ===== Premium Dashboard: aggregate stats across all keys =====
+router.get("/dashboard", requireAuth, async (req, res) => {
+    try {
+        const activeKeysResult = await pool.query(
+            `SELECT COUNT(*) AS count FROM api_keys WHERE user_id = $1 AND active = TRUE`,
+            [req.user.id]
+        );
+
+        const dailyLimitResult = await pool.query(
+            `SELECT COALESCE(SUM(daily_limit), 0) AS total FROM api_keys WHERE user_id = $1 AND active = TRUE`,
+            [req.user.id]
+        );
+
+        const requestsTodayResult = await pool.query(
+            `SELECT COUNT(*) AS count FROM api_request_logs
+             WHERE user_id = $1 AND created_at::date = CURRENT_DATE`,
+            [req.user.id]
+        );
+
+        const successRateResult = await pool.query(
+            `SELECT
+                COUNT(*) FILTER (WHERE success = TRUE) AS successful,
+                COUNT(*) AS total
+             FROM api_request_logs
+             WHERE user_id = $1`,
+            [req.user.id]
+        );
+
+        const avgResponseResult = await pool.query(
+            `SELECT AVG(response_time_ms) AS avg_ms FROM api_request_logs WHERE user_id = $1`,
+            [req.user.id]
+        );
+
+        const successful = parseInt(successRateResult.rows[0].successful, 10) || 0;
+        const totalLogs = parseInt(successRateResult.rows[0].total, 10) || 0;
+        const successRate = totalLogs > 0 ? ((successful / totalLogs) * 100).toFixed(1) : null;
+
+        const avgMs = avgResponseResult.rows[0].avg_ms;
+        const avgResponseSeconds = avgMs ? (parseFloat(avgMs) / 1000).toFixed(1) : null;
+
+        res.json({
+            success: true,
+            dashboard: {
+                activeKeys: parseInt(activeKeysResult.rows[0].count, 10),
+                requestsToday: parseInt(requestsTodayResult.rows[0].count, 10),
+                dailyLimit: parseInt(dailyLimitResult.rows[0].total, 10),
+                successRate,
+                avgResponseSeconds
+            }
+        });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch dashboard stats"
+        });
+    }
+});
+
+module.exports = router;

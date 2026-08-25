@@ -1,0 +1,30 @@
+.table-wrap{ overflow-x:auto; }
+table{ width:100%; border-collapse:collapse; }
+th{
+  text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:0.4px; color:var(--lo);
+  font-weight:600; padding:0 10px 10px; border-bottom:1px solid var(--border);
+}
+td{ padding:13px 10px; font-size:13.5px; border-bottom:1px solid var(--border); }
+tr{ transition:background .18s ease; }
+tbody tr:hover{ background:rgba(255,255,255,0.025); }
+tr:last-child td{ border-bottom:none; }
+.target-cell{ font-weight:500; }
+.muted{ color:var(--lo); }
+
+.risk-pill{
+  display:inline-flex; align-items:center; gap:6px; color:var(--c); font-weight:600; font-size:12.5px;
+  background:color-mix(in srgb, var(--c) 12%, transparent); border:1px solid color-mix(in srgb, var(--c) 30%, transparent);
+  padding:4px 10px; border-radius:99px;
+}
+.risk-dot{ width:6px; height:6px; border-radius:50%; background:var(--c); box-shadow:0 0 6px var(--c); }
+.risk-pill.pulse .risk-dot{ animation:livePulse 1.4s ease-in-out infinite; }
+
+.report-link{
+  background:none; border:none; color:var(--signal); font-size:12.5px; font-weight:600;
+  display:flex; align-items:center; cursor:pointer; transition:gap .15s ease;
+}
+.report-link:hover{ gap:4px; }
+
+@media (prefers-reduced-motion: reduce){
+  .risk-pill.pulse .risk-dot{ animation:none; }
+}

@@ -1,0 +1,33 @@
+.activity-panel{
+  background:linear-gradient(180deg, rgba(26,35,56,0.55), rgba(19,26,43,0.75));
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.activity-head-right{ display:flex; align-items:center; gap:12px; }
+
+.range-toggle{ display:flex; background:var(--panel-raised); border-radius:9px; padding:3px; gap:2px; }
+.range-toggle button{
+  background:none; border:none; color:var(--lo); font-size:12px; font-weight:600;
+  padding:5px 12px; border-radius:7px; cursor:pointer; transition:all .15s ease;
+}
+.range-toggle button:hover{ color:var(--hi); }
+.range-toggle button.is-active{ background:var(--signal); color:#fff; }
+
+.chart-legend{ display:flex; gap:16px; margin:-6px 0 10px; }
+.legend-item{ display:flex; align-items:center; gap:7px; font-size:12px; color:var(--lo); font-weight:500; }
+.legend-dot{
+  width:8px; height:8px; border-radius:50%; background:var(--lc); box-shadow:0 0 7px var(--lc);
+  animation:legendPulse 2.4s ease-in-out infinite;
+}
+.legend-item:nth-child(2) .legend-dot{ animation-delay:.6s; }
+@keyframes legendPulse{ 0%,100%{ transform:scale(1); opacity:.85; } 50%{ transform:scale(1.35); opacity:1; } }
+
+.chart-tip{ background:#0E1524; border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12px; }
+.chart-tip-label{ color:var(--lo); margin-bottom:6px; }
+.chart-tip-row{ display:flex; align-items:center; gap:6px; color:var(--hi); }
+.chart-tip-row span:first-child{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+.chart-tip-row b{ margin-left:auto; }
+
+@media (prefers-reduced-motion: reduce){
+  .legend-dot{ animation:none; }
+}

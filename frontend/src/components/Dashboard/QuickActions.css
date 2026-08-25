@@ -1,0 +1,11 @@
+.actions-row{ display:flex; flex-wrap:wrap; gap:10px; }
+.action-btn{
+  display:flex; align-items:center; gap:8px; background:var(--panel-raised); border:1px solid var(--border);
+  color:var(--hi); font-size:13px; font-weight:500; padding:10px 16px; border-radius:11px; cursor:pointer;
+  transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.action-btn:hover{ border-color:var(--signal); transform:translateY(-2px); }
+.action-btn.primary{
+  background:linear-gradient(135deg,var(--signal),var(--violet)); border:none; color:#fff; font-weight:600;
+}
+.action-btn.primary:hover{ box-shadow:0 10px 22px -10px rgba(91,141,239,0.55); }

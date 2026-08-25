@@ -1,0 +1,350 @@
+.core-stage {
+  position: relative;
+  isolation: isolate;
+  width: min(60vw, 420px);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  perspective: 900px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.core-tilt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1);
+  filter: drop-shadow(0 0 46px rgba(79, 140, 255, 0.28));
+}
+
+/* Outer hex frame */
+.core-hex {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(10px);
+}
+
+.core-hex__shape {
+  fill: rgba(79, 140, 255, 0.04);
+  stroke: rgba(148, 178, 255, 0.55);
+  stroke-width: 1.2;
+}
+
+.core-hex__shape--inner {
+  stroke: rgba(34, 211, 238, 0.35);
+  stroke-dasharray: 4 6;
+  animation: hexRotateDash 26s linear infinite;
+}
+
+@keyframes hexRotateDash {
+  to { stroke-dashoffset: -400; }
+}
+
+/* Rotating scan ring */
+.core-scan-ring {
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 178, 255, 0.18);
+  transform: translateZ(30px);
+  overflow: hidden;
+  animation: coreSpin 14s linear infinite;
+}
+
+.core-scan-sweep {
+  position: absolute;
+  inset: -4%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(34, 211, 238, 0.55) 14deg,
+    transparent 34deg
+  );
+}
+
+@keyframes coreSpin {
+  to { transform: translateZ(30px) rotate(360deg); }
+}
+
+/* Orbiting network nodes */
+.core-orbit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateZ(46px);
+  animation: coreSpin 34s linear infinite reverse;
+}
+
+.core-node {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px;
+}
+
+/* Glass core */
+.core-glass {
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(148, 178, 255, 0.22),
+    rgba(11, 15, 26, 0.9) 70%
+  );
+  border: 1px solid rgba(148, 178, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateZ(60px);
+  box-shadow:
+    inset 0 0 30px rgba(79, 140, 255, 0.35),
+    0 0 40px rgba(34, 211, 238, 0.2);
+}
+
+.core-eye {
+  position: relative;
+  width: 46%;
+  height: 46%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.core-eye__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(34, 211, 238, 0.7);
+  animation: eyePulseRing 2.6s ease-in-out infinite;
+}
+
+.core-eye__pupil {
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #eaf1ff, #4f8cff 60%, #1c3a80 100%);
+  animation: eyePulseCore 2.6s ease-in-out infinite;
+}
+
+@keyframes eyePulseRing {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.18); opacity: 0.25; }
+}
+
+@keyframes eyePulseCore {
+  0%, 100% { box-shadow: 0 0 12px 3px rgba(79, 140, 255, 0.7); }
+  50% { box-shadow: 0 0 22px 7px rgba(34, 211, 238, 0.9); }
+}
+
+/* Soft contact shadow beneath the core to sell the 3D tilt */
+.core-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -6%;
+  width: 60%;
+  height: 14%;
+  background: radial-gradient(ellipse, rgba(79, 140, 255, 0.35), transparent 70%);
+  transform: translateX(-50%) translateZ(-40px);
+  filter: blur(4px);
+}
+
+.core-label {
+  margin-top: 28px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: rgba(138, 147, 172, 0.85);
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-tilt,
+  .core-hex__shape--inner,
+  .core-scan-ring,
+  .core-orbit,
+  .core-eye__ring,
+  .core-eye__pupil {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .core-stage {
+    width: min(78vw, 300px);
+  }
+}
+
+/* ===== PREMIUM HEX GLOW ===== */
+.core-hex {
+  filter:
+    drop-shadow(0 0 12px rgba(56, 189, 248, 0.35))
+    drop-shadow(0 0 28px rgba(56, 189, 248, 0.18));
+}
+
+/* ===== AI AURA ===== */
+.core-stage::before {
+  content: "";
+  position: absolute;
+  width: 430px;
+  height: 430px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+  filter: blur(70px);
+  animation: coreAura 6s ease-in-out infinite;
+  z-index: -2;
+}
+
+@keyframes coreAura {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+/* ===== CORE PULSE ===== */
+.core-glass {
+  animation: coreBreath 5s ease-in-out infinite;
+}
+
+@keyframes coreBreath {
+  0%, 100% { transform: translateZ(60px) scale(1); }
+  50% { transform: translateZ(60px) scale(1.04); }
+}
+
+/* ===== ORBIT GLOW ===== */
+.core-orbit {
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.35));
+}
+
+/* ===== NODE GLOW (position wrapper + animated inner dot,
+   so the pulse never fights the orbit's rotate/translateX) ===== */
+.core-node__dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #eaf1ff;
+  animation: nodePulse 2.8s ease-in-out infinite;
+}
+
+@keyframes nodePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(79, 140, 255, 0.8);
+  }
+  50% {
+    transform: scale(1.8);
+    box-shadow: 0 0 24px rgba(34, 211, 238, 1);
+  }
+}
+
+/* ===== FLOATING LIGHT ===== */
+.core-stage::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 25%;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
+  filter: blur(30px);
+  animation: lightFloat 8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes lightFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+}
+
+/* ========================= */
+/* ENERGY RINGS */
+/* ========================= */
+.core-energy-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.08);
+  animation: energySpin linear infinite;
+}
+
+.core-energy-ring--one {
+  inset: 5%;
+  animation-duration: 18s;
+}
+
+.core-energy-ring--two {
+  inset: 15%;
+  animation-duration: 26s;
+  animation-direction: reverse;
+}
+
+@keyframes energySpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========================= */
+/* PARTICLES */
+/* ========================= */
+.core-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.core-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: particleFloat 8s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+@keyframes particleFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50% { transform: translateY(-18px); opacity: 1; }
+}
+
+/* ========================= */
+/* NEURAL LINKS
+   Fixed 240x240 real-pixel box (NOT stretched to 100% of the
+   container) so 1 viewBox unit = 1 real px - this matches the
+   node's fixed 108px translateX exactly, at any screen size. */
+/* ========================= */
+.core-links {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.core-links line {
+  stroke: rgba(56, 189, 248, 0.22);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.5));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-stage::before,
+  .core-stage::after,
+  .core-glass,
+  .core-node__dot,
+  .core-energy-ring--one,
+  .core-energy-ring--two,
+  .core-particle {
+    animation: none;
+  }
+}

@@ -1,0 +1,74 @@
+.scan-demo {
+  position: relative;
+  background: transparent;
+  padding: 40px 24px 120px;
+}
+
+.scan-demo__inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 0.9fr 1fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.scan-demo__copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-demo__eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: #4f8cff;
+  margin-bottom: 16px;
+}
+
+.scan-demo__title {
+  font-family: "Sora", "Inter", sans-serif;
+  font-weight: 700;
+  font-size: clamp(24px, 3.4vw, 34px);
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  color: #eaf1ff;
+  margin: 0 0 14px;
+}
+
+.scan-demo__subcopy {
+  font-family: "Inter", sans-serif;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: #8a93ac;
+  margin: 0;
+  max-width: 420px;
+}
+
+.scan-demo__visual {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 860px) {
+  .scan-demo__inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+    text-align: center;
+  }
+
+  .scan-demo__copy {
+    align-items: center;
+  }
+
+  .scan-demo__subcopy {
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 560px) {
+  .scan-demo {
+    padding: 20px 18px 88px;
+  }
+}

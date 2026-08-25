@@ -1,0 +1,17 @@
+.loader {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(6, 16, 25, 0.25);
+  border-top-color: #061019;
+  animation: loaderSpin 0.7s linear infinite;
+}
+
+@keyframes loaderSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader {
+    animation-duration: 1.4s;
+  }
+}
