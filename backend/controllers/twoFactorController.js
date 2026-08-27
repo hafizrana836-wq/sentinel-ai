@@ -34,13 +34,6 @@ async function verify2FA(req, res, next) {
   const user = await User.findByIdWithTwoFactorSecret(req.user.id);
   if (!user?.twoFactorSecret) return next(badRequest("2FA setup not initiated"));
 
-  // TEMPORARY DEBUG — remove once 2FA verification is confirmed working.
-  console.log("DEBUG 2FA:", {
-    received: token,
-    secret: user.twoFactorSecret,
-    expected: authenticator.generate(user.twoFactorSecret),
-    serverTime: new Date().toISOString(),
-  });
 
   if (!authenticator.verify({ token, secret: user.twoFactorSecret })) {
     return next(badRequest("Invalid code"));
@@ -71,13 +64,6 @@ async function loginVerify2FA(req, res, next) {
     return next(badRequest("2FA not enabled for this account"));
   }
 
-  // TEMPORARY DEBUG — remove once login 2FA is confirmed working.
-  console.log("DEBUG LOGIN 2FA:", {
-    received: token,
-    secret: user.twoFactorSecret,
-    expected: authenticator.generate(user.twoFactorSecret),
-    serverTime: new Date().toISOString(),
-  });
 
   if (!authenticator.verify({ token, secret: user.twoFactorSecret })) {
     return next(badRequest("Invalid code"));
