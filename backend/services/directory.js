@@ -1,4 +1,5 @@
 const axios = require("axios");
+const https = require("https");
 
 const paths = [
     "/admin",
@@ -33,7 +34,7 @@ const paths = [
     "/phpmyadmin"
 ];
 
-async function checkPath(target, path, followRedirects = true) {
+async function checkPath(target, path, lookup) {
     const url = target.replace(/\/$/, "") + path;
     try {
         const response = await axios.get(
@@ -41,9 +42,10 @@ async function checkPath(target, path, followRedirects = true) {
             {
                 timeout: 3000,
                 validateStatus: () => true,
-                maxRedirects: followRedirects ? 5 : 0
+                httpsAgent: lookup ? new https.Agent({ lookup }) : undefined
             }
         );
+
         if (
             response.status === 200 ||
             response.status === 301 ||
@@ -68,6 +70,7 @@ async function checkPath(target, path, followRedirects = true) {
             ) {
                 severity = "High";
             }
+
             return {
                 path,
                 status: response.status,
@@ -80,6 +83,7 @@ async function checkPath(target, path, followRedirects = true) {
                     "Unknown"
             };
         }
+
         return { status: response.status };
     }
     catch {
@@ -92,13 +96,14 @@ async function checkPath(target, path, followRedirects = true) {
  * result shape as before, just bounded by the slowest single request
  * (~3s worst case) rather than the sum of all of them (~90s worst case).
  */
+async function scanDirectories(target, lookup) {
+    const outcomes = await Promise.all(paths.map((path) => checkPath(target, path, lookup)));
 
-async function scanDirectories(target, followRedirects = true) {
-    const outcomes = await Promise.all(paths.map((path) => checkPath(target, path, followRedirects)));
     let accessible = 0;
     let forbidden = 0;
     let redirected = 0;
     const results = [];
+
     for (const outcome of outcomes) {
         if (!outcome) continue;
         if (outcome.status === 200) accessible++;
@@ -106,6 +111,7 @@ async function scanDirectories(target, followRedirects = true) {
         if (outcome.status === 301 || outcome.status === 302) redirected++;
         if (outcome.path) results.push(outcome);
     }
+
     return {
         scanned: paths.length,
         accessible,
@@ -118,3 +124,5 @@ async function scanDirectories(target, followRedirects = true) {
         directories: results
     };
 }
+
+module.exports = scanDirectories;

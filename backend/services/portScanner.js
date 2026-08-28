@@ -41,7 +41,7 @@ const PORT_SEVERITY = {
 const BANNER_PORTS = new Set([21, 22, 25, 110, 143]);
 const BANNER_WAIT_MS = 800;
 
-function probePort(host, port, timeoutMs = 2500) {
+function probePort(host, port, lookup, timeoutMs = 2500) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     let done = false;
@@ -65,7 +65,7 @@ function probePort(host, port, timeoutMs = 2500) {
     });
     socket.once("timeout", () => finish(false));
     socket.once("error", () => finish(false));
-    socket.connect(port, host);
+    socket.connect({ port, host, ...(lookup ? { lookup } : {}) });
   });
 }
 
@@ -79,10 +79,10 @@ function computeExposure(openWithSeverity) {
   return "LOW";
 }
 
-async function scanPorts(hostname) {
+async function scanPorts(hostname, lookup) {
   const results = await Promise.all(
     COMMON_PORTS.map(async ({ port, service }) => {
-      const { open, banner } = await probePort(hostname, port);
+      const { open, banner } = await probePort(hostname, port, lookup);
       return { port, service, open, banner: banner || null, severity: PORT_SEVERITY[port] || "Medium" };
     })
   );

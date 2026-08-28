@@ -1,12 +1,14 @@
 const axios = require("axios");
+const https = require("https");
 const { XMLParser } = require("fast-xml-parser");
 
-async function analyseSitemap(target) {
+async function analyseSitemap(target, lookup) {
     try {
         const url = target.replace(/\/$/, "") + "/sitemap.xml";
         const response = await axios.get(url, {
             timeout: 5000,
-            validateStatus: () => true
+            validateStatus: () => true,
+            httpsAgent: lookup ? new https.Agent({ lookup }) : undefined
         });
 
         if (response.status !== 200) {

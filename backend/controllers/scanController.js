@@ -1,6 +1,4 @@
-
 // Place this file at: controllers/scanController.js
-const User = require("../models/User");
 const Scan = require("../models/Scan");
 const { checkSSL } = require("../services/sslService");
 const { checkHeaders } = require("../services/headerService");
@@ -45,14 +43,21 @@ function emitUserUpdate(ownerId, event, payload = {}) {
 }
 
 /** POST /api/scan  { target: "example.com" } */
+const MAX_CONCURRENT_SCANS_PER_USER = 3;
+
 async function startScan(req, res, next) {
   const { target } = req.body;
 
-  let hostname;
+  let hostname, lookup;
   try {
-    hostname = await validateTarget(target); // throws on missing/malformed/private-IP targets
+    ({ hostname, lookup } = await validateTarget(target)); // throws on missing/malformed/private-IP targets
   } catch (err) {
     return next(badRequest(err.message));
+  }
+
+  const activeCount = await Scan.activeCountForOwner(req.user.id);
+  if (activeCount >= MAX_CONCURRENT_SCANS_PER_USER) {
+    return next(badRequest(`You already have ${activeCount} scans running. Wait for one to finish before starting another.`));
   }
 
   const scan = await Scan.create({ target: hostname, ownerId: req.user.id });
@@ -61,77 +66,60 @@ async function startScan(req, res, next) {
   // socket room `scan:<id>` and watch live progress; the actual work
   // continues after the response is sent.
   res.status(202).json({ scanId: scan.id, status: "running" });
-  runScanPipeline(scan.id, hostname, scan.ownerId).catch((err) => console.error("[scan] pipeline failed:", err));
+  runScanPipeline(scan.id, hostname, scan.ownerId, lookup).catch((err) => console.error("[scan] pipeline failed:", err));
 }
 
-async function runScanPipeline(scanId, hostname, ownerId) {
+async function runScanPipeline(scanId, hostname, ownerId, lookup) {
   emitProgress(scanId, "Initializing", "running");
   const raw = {};
+  // robots.js / sitemap.js / securitytxt.js / directory.js all build their
+  // own URLs by string-concatenating onto this, so it needs the scheme —
+  // unlike checkSSL/checkHeaders/etc., which take a bare hostname.
   const baseUrl = `https://${hostname}`;
-
-  // Owner's saved scan preferences — falls back to "run everything" if
-  // they've never touched Settings (scan_profile is nullable).
-  const user = await User.findById(ownerId);
-  const profile = user?.scanProfile || {};
-  const checks =
-    Array.isArray(profile.checks) && profile.checks.length
-      ? profile.checks
-      : ["SSL/TLS", "Security Headers", "DNS", "Ports", "CVE", "Directory Discovery"];
-  const followRedirects = profile.followRedirects !== false;
-  const saveHistory = profile.saveHistory !== false;
-  const runCheck = (name) => checks.includes(name);
 
   try {
     emitProgress(scanId, "Initializing", "done");
 
-    if (runCheck("SSL/TLS")) {
-      emitProgress(scanId, "SSL", "running");
-      raw.ssl = await checkSSL(hostname);
-      emitProgress(scanId, "SSL", "done", { result: raw.ssl });
-    } else {
-      raw.ssl = null;
-      emitProgress(scanId, "SSL", "skipped");
-    }
+    emitProgress(scanId, "SSL", "running");
+    raw.ssl = await checkSSL(hostname, lookup);
+    emitProgress(scanId, "SSL", "done", { result: raw.ssl });
 
-    if (runCheck("Security Headers")) {
-      emitProgress(scanId, "Headers", "running");
-      raw.headers = await checkHeaders(hostname, followRedirects);
-      raw.technology = detectTechnology(raw.headers?.rawHeaders || {});
-      emitProgress(scanId, "Headers", "done", { result: raw.headers });
-    } else {
-      raw.headers = null;
-      raw.technology = detectTechnology({});
-      emitProgress(scanId, "Headers", "skipped");
-    }
+    emitProgress(scanId, "Headers", "running");
+    raw.headers = await checkHeaders(hostname, lookup);
+    raw.technology = detectTechnology(raw.headers?.rawHeaders || {});
+    emitProgress(scanId, "Headers", "done", { result: raw.headers });
 
-    if (runCheck("Ports")) {
-      emitProgress(scanId, "Ports", "running");
-      raw.ports = await scanPorts(hostname);
-      emitProgress(scanId, "Ports", "done", { result: raw.ports });
-    } else {
-      raw.ports = null;
-      emitProgress(scanId, "Ports", "skipped");
-    }
+    emitProgress(scanId, "Ports", "running");
+    raw.ports = await scanPorts(hostname, lookup);
+    emitProgress(scanId, "Ports", "done", { result: raw.ports });
 
-    emitProgress(scanId, "CVEs", runCheck("CVE") ? "running" : "skipped");
+    // DNS/whois/geo run alongside CVE lookup — they don't block each other.
+    // CVE lookup gets the full headers object (server + poweredBy banners)
+    // AND the open ports (SSH/FTP/etc banners) so fingerprintService can
+    // match against everything the scan actually observed, not just the
+    // HTTP Server header.
+    emitProgress(scanId, "CVEs", "running");
     const [dnsResult, whoisResult, geoResult, cveResult] = await Promise.all([
-      runCheck("DNS") ? checkDNS(hostname) : Promise.resolve(null),
+      checkDNS(hostname),
       checkWhois(hostname),
       checkGeo(hostname),
-      runCheck("CVE") ? checkCVEs(raw.headers, raw.ports?.open) : Promise.resolve(null),
+      checkCVEs(raw.headers, raw.ports?.open),
     ]);
     raw.dns = dnsResult;
     raw.whois = whoisResult;
     raw.geo = geoResult;
     raw.cves = cveResult;
-    if (runCheck("CVE")) emitProgress(scanId, "CVEs", "done", { result: raw.cves });
+    emitProgress(scanId, "CVEs", "done", { result: raw.cves });
 
+    // Recon: robots.txt, sitemap.xml, security.txt, and a directory/path
+    // exposure sweep. Independent of each other, so they run in parallel —
+    // directory.js is the slow one here (loops sequentially over ~30 paths).
     emitProgress(scanId, "Recon", "running");
     const [robotsResult, sitemapResult, securityTxtResult, directoryResult] = await Promise.all([
-      analyseRobots(baseUrl),
-      analyseSitemap(baseUrl),
-      analyseSecurityTxt(baseUrl),
-      runCheck("Directory Discovery") ? scanDirectories(baseUrl, followRedirects) : Promise.resolve(null),
+      analyseRobots(baseUrl, lookup),
+      analyseSitemap(baseUrl, lookup),
+      analyseSecurityTxt(baseUrl, lookup),
+      scanDirectories(baseUrl, lookup),
     ]);
     raw.robots = robotsResult;
     raw.sitemap = sitemapResult;
@@ -142,11 +130,18 @@ async function runScanPipeline(scanId, hostname, ownerId) {
     });
 
     emitProgress(scanId, "AI Analysis", "running");
+    // `hostname` is passed through so riskEngine can attach the actual
+    // scanned domain to SPF/DMARC evidence instead of leaving it null.
     const { findings, riskScore, securityScore, grade, scoringModel, categories, explanation } = computeRisk(
       raw,
       hostname
     );
     const recommendations = generateRecommendations(findings);
+
+    // Findings Engine: merge each finding's recommendation directly onto it,
+    // so the frontend gets one standardized object per finding (id, title,
+    // severity, category, kind, evidence, recommendation) instead of having
+    // to cross-reference two separate arrays by code.
     const recByCode = Object.fromEntries(recommendations.map((r) => [r.findingCode, r.message]));
     const enrichedFindings = findings.map((f) => ({
       id: f.code,
@@ -154,6 +149,8 @@ async function runScanPipeline(scanId, hostname, ownerId) {
       recommendation: recByCode[f.code] || null,
     }));
 
+    // Plain-English AI summary — built from the same securityScore/findings
+    // the rest of the report uses, so it never drifts out of sync with them.
     const aiAnalysis = generateAIAnalysis({
       securityScore,
       ssl: raw.ssl,
@@ -177,11 +174,15 @@ async function runScanPipeline(scanId, hostname, ownerId) {
       categoryBreakdown: categories,
       scoreExplanation: explanation,
       aiAnalysis,
-      keepInHistory: saveHistory,
     });
 
     emitProgress(scanId, "AI Analysis", "complete", { scan });
+
+    // Dashboard (or any other open tab) doesn't know this scanId and never
+    // joined `scan:<id>`, so it needs its own account-wide signal to know
+    // it's time to refetch stats/recent-scans.
     emitUserUpdate(ownerId, "scan:completed", { scanId, target: scan.target });
+
     await sendCriticalAlert(scan);
   } catch (err) {
     await Scan.markFailed(scanId, err.message);
@@ -228,10 +229,22 @@ async function getHistory(req, res) {
 
 /** Used by the cron manager — same pipeline and same SSRF guard, no req/res involved. */
 async function startScanInternal(target, ownerId) {
-  const hostname = await validateTarget(target);
+  const { hostname, lookup } = await validateTarget(target);
   const scan = await Scan.create({ target: hostname, ownerId });
-  await runScanPipeline(scan.id, hostname, ownerId);
+  await runScanPipeline(scan.id, hostname, ownerId, lookup);
   return scan.id;
 }
 
-module.exports = { startScan, getScan, downloadReport, getHistory, startScanInternal };
+/**
+ * Fire-and-forget variant for the public API — returns as soon as the Scan
+ * row exists, without waiting for the (often slow) pipeline to finish.
+ * Callers should poll GET /api/v1/scan/:id for status/results.
+ */
+async function startScanAsync(target, ownerId) {
+  const { hostname, lookup } = await validateTarget(target);
+  const scan = await Scan.create({ target: hostname, ownerId });
+  runScanPipeline(scan.id, hostname, ownerId, lookup).catch((err) => console.error("[scan] pipeline failed:", err));
+  return scan;
+}
+
+module.exports = { startScan, getScan, downloadReport, getHistory, startScanInternal, startScanAsync };

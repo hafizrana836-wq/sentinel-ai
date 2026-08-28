@@ -18,6 +18,37 @@ function publicUser(user) {
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
 
+// Per-account TOTP lockout (separate from — and stricter than — the per-IP
+// authLimiter already on this route). In-memory: resets on deploy/restart
+// and doesn't share state across instances, which is fine for a
+// single-instance deployment; move to Redis/DB if you scale to multiple.
+const FAILED_2FA = new Map(); // userId -> { count, lockedUntil }
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+function checkLockout(userId) {
+  const entry = FAILED_2FA.get(userId);
+  if (entry?.lockedUntil && entry.lockedUntil > Date.now()) {
+    const minutesLeft = Math.ceil((entry.lockedUntil - Date.now()) / 60000);
+    return `Too many failed attempts. Try again in ${minutesLeft} minute(s).`;
+  }
+  return null;
+}
+
+function recordFailure(userId) {
+  const entry = FAILED_2FA.get(userId) || { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOCKOUT_MS;
+    entry.count = 0;
+  }
+  FAILED_2FA.set(userId, entry);
+}
+
+function recordSuccess(userId) {
+  FAILED_2FA.delete(userId);
+}
+
 /** POST /auth/2fa/setup — logged-in user starts 2FA setup */
 async function setup2FA(req, res) {
   const secret = authenticator.generateSecret();
@@ -33,7 +64,6 @@ async function verify2FA(req, res, next) {
   if (!token) return next(badRequest("token is required"));
   const user = await User.findByIdWithTwoFactorSecret(req.user.id);
   if (!user?.twoFactorSecret) return next(badRequest("2FA setup not initiated"));
-
 
   if (!authenticator.verify({ token, secret: user.twoFactorSecret })) {
     return next(badRequest("Invalid code"));
@@ -64,10 +94,14 @@ async function loginVerify2FA(req, res, next) {
     return next(badRequest("2FA not enabled for this account"));
   }
 
+  const lockoutMessage = checkLockout(user.id);
+  if (lockoutMessage) return next(badRequest(lockoutMessage));
 
   if (!authenticator.verify({ token, secret: user.twoFactorSecret })) {
+    recordFailure(user.id);
     return next(badRequest("Invalid code"));
   }
+  recordSuccess(user.id);
   const fullUser = await User.findById(user.id);
   const session = await Session.create(user.id, {
     userAgent: req.headers["user-agent"] || null,

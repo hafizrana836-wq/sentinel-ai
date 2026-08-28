@@ -1,11 +1,13 @@
 const axios = require("axios");
+const https = require("https");
 
-async function analyseRobots(target) {
+async function analyseRobots(target, lookup) {
     try {
         const url = target.replace(/\/$/, "") + "/robots.txt";
         const response = await axios.get(url, {
             timeout: 5000,
-            validateStatus: () => true
+            validateStatus: () => true,
+            httpsAgent: lookup ? new https.Agent({ lookup }) : undefined
         });
 
         if (response.status !== 200) {

@@ -1,4 +1,5 @@
 const axios = require("axios");
+const https = require("https");
 
 function parse(text, status) {
     const lines = text.split("\n");
@@ -34,9 +35,13 @@ function parse(text, status) {
     };
 }
 
-async function fetchOne(url) {
+async function fetchOne(url, lookup) {
     try {
-        const response = await axios.get(url, { timeout: 4000, validateStatus: () => true });
+        const response = await axios.get(url, {
+            timeout: 4000,
+            validateStatus: () => true,
+            httpsAgent: lookup ? new https.Agent({ lookup }) : undefined,
+        });
         if (response.status !== 200) return null;
         return parse(response.data, response.status);
     } catch {
@@ -44,14 +49,14 @@ async function fetchOne(url) {
     }
 }
 
-async function analyseSecurityTxt(target) {
+async function analyseSecurityTxt(target, lookup) {
     // RFC 9116 makes /.well-known/security.txt canonical and /security.txt a
     // legacy fallback — check both at once instead of waiting on the first
     // to fail before trying the second, and prefer the canonical result.
     const wellKnownUrl = target.replace(/\/$/, "") + "/.well-known/security.txt";
     const legacyUrl = target.replace(/\/$/, "") + "/security.txt";
 
-    const [wellKnown, legacy] = await Promise.all([fetchOne(wellKnownUrl), fetchOne(legacyUrl)]);
+    const [wellKnown, legacy] = await Promise.all([fetchOne(wellKnownUrl, lookup), fetchOne(legacyUrl, lookup)]);
 
     if (wellKnown) return wellKnown;
     if (legacy) return legacy;

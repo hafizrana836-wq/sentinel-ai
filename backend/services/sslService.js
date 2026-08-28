@@ -71,12 +71,12 @@ async function checkCAA(hostname) {
   }
 }
 
-function connectMain(hostname, port, timeoutMs) {
+function connectMain(hostname, lookup, port, timeoutMs) {
   return new Promise((resolve) => {
     let socket;
     try {
       socket = tls.connect(
-        { host: hostname, port, servername: hostname, timeout: timeoutMs, rejectUnauthorized: false },
+        { host: hostname, port, servername: hostname, timeout: timeoutMs, rejectUnauthorized: false, ...(lookup ? { lookup } : {}) },
         () => {
           const cert = socket.getPeerCertificate(true); // true = include chain via issuerCertificate
           const protocol = socket.getProtocol();
@@ -142,12 +142,12 @@ function connectMain(hostname, port, timeoutMs) {
 // still accepts it, even though our normal connection above negotiated
 // something stronger by default. This is a genuine downgrade test, not an
 // inference from the main connection.
-function probeDeprecatedVersion(hostname, port, version, timeoutMs = 5000) {
+function probeDeprecatedVersion(hostname, lookup, port, version, timeoutMs = 5000) {
   return new Promise((resolve) => {
     let socket;
     try {
       socket = tls.connect(
-        { host: hostname, port, servername: hostname, timeout: timeoutMs, rejectUnauthorized: false, minVersion: version, maxVersion: version },
+        { host: hostname, port, servername: hostname, timeout: timeoutMs, rejectUnauthorized: false, minVersion: version, maxVersion: version, ...(lookup ? { lookup } : {}) },
         () => {
           socket.end();
           resolve(true);
@@ -167,7 +167,7 @@ function probeDeprecatedVersion(hostname, port, version, timeoutMs = 5000) {
 // Explicitly offers ONLY weak/deprecated ciphers and sees whether the server
 // accepts any of them — a direct test, not just inspecting whichever cipher
 // our normal connection happened to negotiate.
-function probeWeakCiphers(hostname, port, timeoutMs = 5000) {
+function probeWeakCiphers(hostname, lookup, port, timeoutMs = 5000) {
   return new Promise((resolve) => {
     let socket;
     try {
@@ -181,6 +181,7 @@ function probeWeakCiphers(hostname, port, timeoutMs = 5000) {
           minVersion: "TLSv1",
           maxVersion: "TLSv1.2",
           ciphers: "RC4:DES-CBC-SHA:DES-CBC3-SHA:EXPORT:NULL:eNULL:aNULL:MD5",
+          ...(lookup ? { lookup } : {}),
         },
         () => {
           const cipher = socket.getCipher();
@@ -204,12 +205,12 @@ function probeWeakCiphers(hostname, port, timeoutMs = 5000) {
  * for deprecated TLS versions and weak ciphers, checks CAA records — all
  * with Node's built-in tls/dns/crypto modules, no external API or library.
  */
-async function checkSSL(hostname, port = 443, timeoutMs = 8000) {
+async function checkSSL(hostname, lookup, port = 443, timeoutMs = 8000) {
   const [main, tls10Supported, tls11Supported, weakCipherProbe, caa] = await Promise.all([
-    connectMain(hostname, port, timeoutMs),
-    probeDeprecatedVersion(hostname, port, "TLSv1", timeoutMs),
-    probeDeprecatedVersion(hostname, port, "TLSv1.1", timeoutMs),
-    probeWeakCiphers(hostname, port, timeoutMs),
+    connectMain(hostname, lookup, port, timeoutMs),
+    probeDeprecatedVersion(hostname, lookup, port, "TLSv1", timeoutMs),
+    probeDeprecatedVersion(hostname, lookup, port, "TLSv1.1", timeoutMs),
+    probeWeakCiphers(hostname, lookup, port, timeoutMs),
     checkCAA(hostname),
   ]);
 
