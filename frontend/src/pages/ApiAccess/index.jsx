@@ -289,8 +289,8 @@ export default function ApiAccess() {
                     <div className="api-newkey-box">
                         <p><strong>New API key — copy it now, it won't be shown again:</strong></p>
                         <div className="api-newkey-value">
-                            <code>{newKey.key_value}</code>
-                            <button onClick={() => copyToClipboard(newKey.key_value, "new")}>
+                            <code>{newKey.key}</code>
+                            <button onClick={() => copyToClipboard(newKey.key, "new")}>
                                 <FaCopy /> {copiedId === "new" ? "Copied!" : "Copy"}
                             </button>
                         </div>
@@ -333,7 +333,7 @@ export default function ApiAccess() {
                                         <div>
                                             <p className="api-key-name">{k.name}</p>
                                             <p className="api-key-masked">
-                                                {k.key_value.slice(0, 8)}••••••••••••••••{k.key_value.slice(-4)}
+                                                {k.keyPrefix}••••••••••••••••{k.keyLast4}
                                             </p>
                                         </div>
                                         <span className={`api-key-status ${k.active ? "status-active" : "status-paused"}`}>
@@ -449,3 +449,4 @@ export default function ApiAccess() {
         </div>
     );
 }
+

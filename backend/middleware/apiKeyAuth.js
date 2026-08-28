@@ -1,4 +1,9 @@
+const crypto = require("crypto");
 const pool = require("../config/db");
+
+function hashKey(rawKey) {
+    return crypto.createHash("sha256").update(rawKey).digest("hex");
+}
 
 function getTodayString() {
     return new Date().toISOString().split("T")[0];
@@ -20,8 +25,8 @@ async function apiKeyAuth(req, res, next) {
 
     try {
         const result = await pool.query(
-            "SELECT * FROM api_keys WHERE key_value = $1 AND active = TRUE",
-            [apiKey]
+            "SELECT * FROM api_keys WHERE key_hash = $1 AND active = TRUE",
+            [hashKey(apiKey)]
         );
 
         if (result.rows.length === 0) {

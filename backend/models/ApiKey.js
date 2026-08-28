@@ -2,8 +2,11 @@
 const crypto = require("crypto");
 const db = require("../config/db");
 
+// key_value (raw key) is intentionally NOT selected anywhere below — only
+// the SHA-256 hash is stored/queried. key_prefix/key_last4 are kept purely
+// for masked display in the dashboard (e.g. "sentinel_live_a1b2••••••••cd34").
 const COLUMNS = `
-  id, user_id AS "userId", name, key_value, active,
+  id, user_id AS "userId", name, key_prefix AS "keyPrefix", key_last4 AS "keyLast4", active,
   daily_limit, requests_today, requests_today_date,
   requests_month, requests_month_ym, total_requests,
   limit_exceeded_count, last_used_at,
@@ -14,14 +17,31 @@ function generateKey() {
   return `sentinel_live_${crypto.randomBytes(24).toString("hex")}`;
 }
 
+function hashKey(rawKey) {
+  return crypto.createHash("sha256").update(rawKey).digest("hex");
+}
+
+/** Splits a freshly generated raw key into its storable (non-secret) parts. */
+function keyParts(rawKey) {
+  return {
+    hash: hashKey(rawKey),
+    prefix: rawKey.slice(0, 18), // "sentinel_live_" + first 4 hex chars
+    last4: rawKey.slice(-4),
+  };
+}
+
 async function create(userId, name) {
+  const rawKey = generateKey();
+  const { hash, prefix, last4 } = keyParts(rawKey);
   const { rows } = await db.query(
-    `INSERT INTO api_keys (user_id, name, key_value)
-     VALUES ($1, $2, $3)
+    `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, key_last4)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING ${COLUMNS}`,
-    [userId, name, generateKey()]
+    [userId, name, hash, prefix, last4]
   );
-  return rows[0];
+  // rawKey is returned only here, once, for the caller to show the user.
+  // It is never stored or logged.
+  return { ...rows[0], rawKey };
 }
 
 async function findAllForUser(userId) {
@@ -40,9 +60,13 @@ async function findByIdForUser(id, userId) {
   return rows[0] || null;
 }
 
-/** No user filter — used by the API-key auth middleware on incoming x-api-key requests. */
-async function findByKeyValue(keyValue) {
-  const { rows } = await db.queryWithRetry(`SELECT ${COLUMNS} FROM api_keys WHERE key_value = $1`, [keyValue]);
+/**
+ * No user filter — used by the API-key auth middleware on incoming x-api-key
+ * requests. Hashes the presented raw key and looks it up by hash, so the
+ * raw key is never compared against or stored in the database.
+ */
+async function findByRawKey(rawKey) {
+  const { rows } = await db.queryWithRetry(`SELECT ${COLUMNS} FROM api_keys WHERE key_hash = $1`, [hashKey(rawKey)]);
   return rows[0] || null;
 }
 
@@ -59,13 +83,16 @@ async function toggleActive(id, userId) {
 }
 
 async function regenerate(id, userId) {
-  const newKeyValue = generateKey();
+  const rawKey = generateKey();
+  const { hash, prefix, last4 } = keyParts(rawKey);
   const { rows } = await db.query(
-    `UPDATE api_keys SET key_value = $1, limit_exceeded_count = 0, active = true
-     WHERE id = $2 AND user_id = $3 RETURNING ${COLUMNS}`,
-    [newKeyValue, id, userId]
+    `UPDATE api_keys SET key_hash = $1, key_prefix = $2, key_last4 = $3, limit_exceeded_count = 0, active = true
+     WHERE id = $4 AND user_id = $5 RETURNING ${COLUMNS}`,
+    [hash, prefix, last4, id, userId]
   );
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  // rawKey is returned only here, once, for the caller to show the user.
+  return { ...rows[0], rawKey };
 }
 
 /**
@@ -152,7 +179,7 @@ module.exports = {
   create,
   findAllForUser,
   findByIdForUser,
-  findByKeyValue,
+  findByRawKey,
   remove,
   toggleActive,
   regenerate,
