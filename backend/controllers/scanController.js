@@ -1,4 +1,6 @@
+
 // Place this file at: controllers/scanController.js
+const User = require("../models/User");
 const Scan = require("../models/Scan");
 const { checkSSL } = require("../services/sslService");
 const { checkHeaders } = require("../services/headerService");
@@ -65,54 +67,71 @@ async function startScan(req, res, next) {
 async function runScanPipeline(scanId, hostname, ownerId) {
   emitProgress(scanId, "Initializing", "running");
   const raw = {};
-  // robots.js / sitemap.js / securitytxt.js / directory.js all build their
-  // own URLs by string-concatenating onto this, so it needs the scheme —
-  // unlike checkSSL/checkHeaders/etc., which take a bare hostname.
   const baseUrl = `https://${hostname}`;
+
+  // Owner's saved scan preferences — falls back to "run everything" if
+  // they've never touched Settings (scan_profile is nullable).
+  const user = await User.findById(ownerId);
+  const profile = user?.scanProfile || {};
+  const checks =
+    Array.isArray(profile.checks) && profile.checks.length
+      ? profile.checks
+      : ["SSL/TLS", "Security Headers", "DNS", "Ports", "CVE", "Directory Discovery"];
+  const followRedirects = profile.followRedirects !== false;
+  const saveHistory = profile.saveHistory !== false;
+  const runCheck = (name) => checks.includes(name);
 
   try {
     emitProgress(scanId, "Initializing", "done");
 
-    emitProgress(scanId, "SSL", "running");
-    raw.ssl = await checkSSL(hostname);
-    emitProgress(scanId, "SSL", "done", { result: raw.ssl });
+    if (runCheck("SSL/TLS")) {
+      emitProgress(scanId, "SSL", "running");
+      raw.ssl = await checkSSL(hostname);
+      emitProgress(scanId, "SSL", "done", { result: raw.ssl });
+    } else {
+      raw.ssl = null;
+      emitProgress(scanId, "SSL", "skipped");
+    }
 
-    emitProgress(scanId, "Headers", "running");
-    raw.headers = await checkHeaders(hostname);
-    raw.technology = detectTechnology(raw.headers?.rawHeaders || {});
-    emitProgress(scanId, "Headers", "done", { result: raw.headers });
+    if (runCheck("Security Headers")) {
+      emitProgress(scanId, "Headers", "running");
+      raw.headers = await checkHeaders(hostname, followRedirects);
+      raw.technology = detectTechnology(raw.headers?.rawHeaders || {});
+      emitProgress(scanId, "Headers", "done", { result: raw.headers });
+    } else {
+      raw.headers = null;
+      raw.technology = detectTechnology({});
+      emitProgress(scanId, "Headers", "skipped");
+    }
 
-    emitProgress(scanId, "Ports", "running");
-    raw.ports = await scanPorts(hostname);
-    emitProgress(scanId, "Ports", "done", { result: raw.ports });
+    if (runCheck("Ports")) {
+      emitProgress(scanId, "Ports", "running");
+      raw.ports = await scanPorts(hostname);
+      emitProgress(scanId, "Ports", "done", { result: raw.ports });
+    } else {
+      raw.ports = null;
+      emitProgress(scanId, "Ports", "skipped");
+    }
 
-    // DNS/whois/geo run alongside CVE lookup — they don't block each other.
-    // CVE lookup gets the full headers object (server + poweredBy banners)
-    // AND the open ports (SSH/FTP/etc banners) so fingerprintService can
-    // match against everything the scan actually observed, not just the
-    // HTTP Server header.
-    emitProgress(scanId, "CVEs", "running");
+    emitProgress(scanId, "CVEs", runCheck("CVE") ? "running" : "skipped");
     const [dnsResult, whoisResult, geoResult, cveResult] = await Promise.all([
-      checkDNS(hostname),
+      runCheck("DNS") ? checkDNS(hostname) : Promise.resolve(null),
       checkWhois(hostname),
       checkGeo(hostname),
-      checkCVEs(raw.headers, raw.ports?.open),
+      runCheck("CVE") ? checkCVEs(raw.headers, raw.ports?.open) : Promise.resolve(null),
     ]);
     raw.dns = dnsResult;
     raw.whois = whoisResult;
     raw.geo = geoResult;
     raw.cves = cveResult;
-    emitProgress(scanId, "CVEs", "done", { result: raw.cves });
+    if (runCheck("CVE")) emitProgress(scanId, "CVEs", "done", { result: raw.cves });
 
-    // Recon: robots.txt, sitemap.xml, security.txt, and a directory/path
-    // exposure sweep. Independent of each other, so they run in parallel —
-    // directory.js is the slow one here (loops sequentially over ~30 paths).
     emitProgress(scanId, "Recon", "running");
     const [robotsResult, sitemapResult, securityTxtResult, directoryResult] = await Promise.all([
       analyseRobots(baseUrl),
       analyseSitemap(baseUrl),
       analyseSecurityTxt(baseUrl),
-      scanDirectories(baseUrl),
+      runCheck("Directory Discovery") ? scanDirectories(baseUrl, followRedirects) : Promise.resolve(null),
     ]);
     raw.robots = robotsResult;
     raw.sitemap = sitemapResult;
@@ -123,18 +142,11 @@ async function runScanPipeline(scanId, hostname, ownerId) {
     });
 
     emitProgress(scanId, "AI Analysis", "running");
-    // `hostname` is passed through so riskEngine can attach the actual
-    // scanned domain to SPF/DMARC evidence instead of leaving it null.
     const { findings, riskScore, securityScore, grade, scoringModel, categories, explanation } = computeRisk(
       raw,
       hostname
     );
     const recommendations = generateRecommendations(findings);
-
-    // Findings Engine: merge each finding's recommendation directly onto it,
-    // so the frontend gets one standardized object per finding (id, title,
-    // severity, category, kind, evidence, recommendation) instead of having
-    // to cross-reference two separate arrays by code.
     const recByCode = Object.fromEntries(recommendations.map((r) => [r.findingCode, r.message]));
     const enrichedFindings = findings.map((f) => ({
       id: f.code,
@@ -142,8 +154,6 @@ async function runScanPipeline(scanId, hostname, ownerId) {
       recommendation: recByCode[f.code] || null,
     }));
 
-    // Plain-English AI summary — built from the same securityScore/findings
-    // the rest of the report uses, so it never drifts out of sync with them.
     const aiAnalysis = generateAIAnalysis({
       securityScore,
       ssl: raw.ssl,
@@ -167,15 +177,11 @@ async function runScanPipeline(scanId, hostname, ownerId) {
       categoryBreakdown: categories,
       scoreExplanation: explanation,
       aiAnalysis,
+      keepInHistory: saveHistory,
     });
 
     emitProgress(scanId, "AI Analysis", "complete", { scan });
-
-    // Dashboard (or any other open tab) doesn't know this scanId and never
-    // joined `scan:<id>`, so it needs its own account-wide signal to know
-    // it's time to refetch stats/recent-scans.
     emitUserUpdate(ownerId, "scan:completed", { scanId, target: scan.target });
-
     await sendCriticalAlert(scan);
   } catch (err) {
     await Scan.markFailed(scanId, err.message);

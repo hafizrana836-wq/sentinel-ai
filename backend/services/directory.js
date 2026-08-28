@@ -33,17 +33,17 @@ const paths = [
     "/phpmyadmin"
 ];
 
-async function checkPath(target, path) {
+async function checkPath(target, path, followRedirects = true) {
     const url = target.replace(/\/$/, "") + path;
     try {
         const response = await axios.get(
             url,
             {
                 timeout: 3000,
-                validateStatus: () => true
+                validateStatus: () => true,
+                maxRedirects: followRedirects ? 5 : 0
             }
         );
-
         if (
             response.status === 200 ||
             response.status === 301 ||
@@ -68,7 +68,6 @@ async function checkPath(target, path) {
             ) {
                 severity = "High";
             }
-
             return {
                 path,
                 status: response.status,
@@ -81,7 +80,6 @@ async function checkPath(target, path) {
                     "Unknown"
             };
         }
-
         return { status: response.status };
     }
     catch {
@@ -94,14 +92,13 @@ async function checkPath(target, path) {
  * result shape as before, just bounded by the slowest single request
  * (~3s worst case) rather than the sum of all of them (~90s worst case).
  */
-async function scanDirectories(target) {
-    const outcomes = await Promise.all(paths.map((path) => checkPath(target, path)));
 
+async function scanDirectories(target, followRedirects = true) {
+    const outcomes = await Promise.all(paths.map((path) => checkPath(target, path, followRedirects)));
     let accessible = 0;
     let forbidden = 0;
     let redirected = 0;
     const results = [];
-
     for (const outcome of outcomes) {
         if (!outcome) continue;
         if (outcome.status === 200) accessible++;
@@ -109,7 +106,6 @@ async function scanDirectories(target) {
         if (outcome.status === 301 || outcome.status === 302) redirected++;
         if (outcome.path) results.push(outcome);
     }
-
     return {
         scanned: paths.length,
         accessible,
@@ -122,5 +118,3 @@ async function scanDirectories(target) {
         directories: results
     };
 }
-
-module.exports = scanDirectories;

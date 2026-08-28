@@ -23,14 +23,25 @@ function toJsonb(value) {
   return value === undefined || value === null ? null : JSON.stringify(value);
 }
 
-async function create({ target, ownerId }) {
+/**
+ * status defaults to 'running' (dashboard scans start their pipeline
+ * immediately). The public API creates scans as 'queued' and flips them to
+ * 'running' via markRunning() once a worker slot actually picks the job up
+ * — see utils/scanQueue.js.
+ */
+async function create({ target, ownerId, status = "running" }) {
   const { rows } = await db.query(
     `INSERT INTO scans (target, owner_id, status)
-     VALUES ($1, $2, 'running')
+     VALUES ($1, $2, $3)
      RETURNING ${SCAN_COLUMNS}`,
-    [target, ownerId]
+    [target, ownerId, status]
   );
   return rows[0];
+}
+
+/** Flips a queued scan to running once the pipeline actually starts. Idempotent/no-op for scans already running. */
+async function markRunning(id) {
+  await db.query(`UPDATE scans SET status = 'running' WHERE id = $1 AND status = 'queued'`, [id]);
 }
 
 /**
