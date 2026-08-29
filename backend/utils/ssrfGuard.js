@@ -37,9 +37,44 @@ function isPrivateIPv6(ip) {
 }
 
 /**
+ * Returns a dns.lookup()-compatible function that always resolves `hostname`
+ * to the exact IPs validated by validateTarget() below, ignoring live DNS.
+ * Pass this as the `lookup` option to https.request / tls.connect / net.Socket.connect
+ * / an http(s).Agent so a connection can't be redirected by a DNS change that
+ * happens after the SSRF check but before the actual socket connects
+ * ("DNS rebinding").
+ */
+function createPinnedLookup(addresses) {
+  return function pinnedLookup(hostname, options, callback) {
+    if (typeof options === "function") {
+      callback = options;
+      options = {};
+    }
+    const wantFamily = options?.family === 6 ? 6 : options?.family === 4 ? 4 : 0;
+    const pool = wantFamily ? addresses.filter((ip) => (ip.includes(":") ? 6 : 4) === wantFamily) : addresses;
+    const use = pool.length ? pool : addresses;
+    if (!use.length) {
+      callback(new Error(`No pinned address available for ${hostname}`));
+      return;
+    }
+    if (options?.all) {
+      callback(
+        null,
+        use.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }))
+      );
+      return;
+    }
+    const address = use[0];
+    callback(null, address, address.includes(":") ? 6 : 4);
+  };
+}
+
+/**
  * Validates a user-supplied scan target and rejects anything that could be
  * used to make the server attack its own network (SSRF). Throws with a
- * clear message on rejection; otherwise resolves to the cleaned hostname.
+ * clear message on rejection; otherwise resolves to { hostname, lookup } —
+ * always use the returned `lookup` for the actual scan connections instead
+ * of re-resolving `hostname` yourself.
  */
 async function validateTarget(rawTarget) {
   if (!rawTarget || typeof rawTarget !== "string") {
@@ -78,7 +113,7 @@ async function validateTarget(rawTarget) {
     if (blocked) throw new Error("This target resolves to a private/internal address and cannot be scanned");
   }
 
-  return hostname;
+  return { hostname, lookup: createPinnedLookup(addresses) };
 }
 
 module.exports = { validateTarget };
