@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { FaShieldAlt } from "react-icons/fa";
+import axios from "axios";
+import { API_BASE } from "../config";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -7,7 +9,12 @@ export default function Navbar() {
   const userRaw = localStorage.getItem("sentinel_user");
   const user = userRaw ? JSON.parse(userRaw) : null;
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      await axios.post(`${API_BASE}/api/auth/logout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+    } catch {
+      // even if the server call fails, still clear the local session below
+    }
     localStorage.removeItem("sentinel_token");
     localStorage.removeItem("sentinel_user");
     navigate("/");
