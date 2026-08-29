@@ -1,54 +1,57 @@
-// Central place for the backend API base URL.
-// Deployment: set VITE_API_BASE_URL in your .env / hosting provider's env vars.
-// Local dev: falls back to the Express server on localhost:5000 if unset.
-import axios from "axios";
+const { Pool } = require("pg");
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
-// The refresh-token is an HttpOnly cookie (never touched by JS) — it still
-// has to be sent with requests for POST /auth/refresh to work.
-axios.defaults.withCredentials = true;
-
-let refreshPromise = null;
-
-function refreshAccessToken() {
-  if (!refreshPromise) {
-    refreshPromise = axios
-      .post(`${API_BASE}/api/auth/refresh`, {}, { withCredentials: true })
-      .then((res) => {
-        localStorage.setItem("sentinel_token", res.data.token);
-        return res.data.token;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
-  }
-  return refreshPromise;
+// DATABASE_URL .env se aa raha hai.
+// Neon ke liye zaroori: hostname mein "-pooler" hona chahiye taake
+// serverless/cron jaisi repeated short connections stable rahein.
+// Example: ep-tiny-waterfall-ax334q4p-pooler.c-4.us-east-2.aws.neon.tech
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not set in .env");
+}
+if (!connectionString.includes("-pooler")) {
+  console.warn(
+    "⚠️  DATABASE_URL mein '-pooler' nahi mila. Neon ka pooled endpoint use karna " +
+    "recommended hai, warna scheduled/cron connections beech mein disconnect ho sakte hain."
+  );
 }
 
-// Access tokens are short-lived (15m) by design — this transparently
-// refreshes an expired one (once) and retries the original request, so the
-// per-file `Authorization: Bearer <token>` calls elsewhere don't need to
-// change at all.
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const original = error.config;
-    const url = original?.url || "";
-    const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/register") || url.includes("/auth/refresh");
+const pool = new Pool({
+  connectionString,
+  ssl: {
+    // Neon hamesha SSL require karta hai. rejectUnauthorized: true rakhna
+    // secure hai — Neon ka cert publicly trusted CA se signed hota hai.
+    rejectUnauthorized: true,
+  },
+  max: 10,                     // ek waqt mein max open connections
+  idleTimeoutMillis: 30000,    // idle connection 30s baad close ho jaye
+  connectionTimeoutMillis: 10000, // 10s tak connect hone ka wait, warna error
+});
 
-    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint && localStorage.getItem("sentinel_token")) {
-      original._retry = true;
-      try {
-        const newToken = await refreshAccessToken();
-        original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` };
-        return axios(original);
-      } catch {
-        localStorage.removeItem("sentinel_token");
-        window.location.href = "/login";
-        return Promise.reject(error);
-      }
+// Pool-level errors ko catch karo taake ek bad connection poori app crash na kare
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle Postgres client:", err.message);
+});
+
+/**
+ * Query helper jo transient connection errors (jaise Neon cold-start /
+ * TLS drop) par ek dafa retry karta hai.
+ */
+async function queryWithRetry(text, params, retries = 1) {
+  try {
+    return await pool.query(text, params);
+  } catch (err) {
+    const isTransient =
+      err.message.includes("socket disconnected") ||
+      err.message.includes("Connection terminated") ||
+      err.code === "ECONNRESET";
+    if (isTransient && retries > 0) {
+      console.warn(`⚠️  Transient DB error (${err.message}), retrying...`);
+      await new Promise((r) => setTimeout(r, 1000));
+      return queryWithRetry(text, params, retries - 1);
     }
-    return Promise.reject(error);
+    throw err;
   }
-);
+}
+
+module.exports = pool;
+module.exports.queryWithRetry = queryWithRetry;
