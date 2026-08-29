@@ -6,12 +6,26 @@ const User = require("../models/User");
 const Session = require("../models/Session");
 const { badRequest } = require("../utils/errors");
 
-function signToken(user, sessionId) {
+function signAccessToken(user, sessionId) {
   return jwt.sign(
     { sub: user.id, email: user.email, role: user.role, sid: sessionId },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "15m" }
   );
+}
+
+function signRefreshToken(userId, sessionId) {
+  return jwt.sign({ sub: userId, sid: sessionId, type: "refresh" }, process.env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+function setRefreshCookie(res, token) {
+  res.cookie("refreshToken", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 }
 
 function publicUser(user) {
@@ -107,7 +121,8 @@ async function loginVerify2FA(req, res, next) {
     userAgent: req.headers["user-agent"] || null,
     ip: req.ip || req.connection?.remoteAddress || null,
   });
-  res.json({ token: signToken(fullUser, session.id), user: publicUser(fullUser) });
+  setRefreshCookie(res, signRefreshToken(user.id, session.id));
+  res.json({ token: signAccessToken(fullUser, session.id), user: publicUser(fullUser) });
 }
 
 module.exports = { setup2FA, verify2FA, disable2FA, loginVerify2FA };

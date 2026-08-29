@@ -25,7 +25,7 @@ async function apiKeyAuth(req, res, next) {
 
     try {
         const result = await pool.query(
-            "SELECT * FROM api_keys WHERE key_hash = $1 AND active = TRUE",
+            "SELECT * FROM api_keys WHERE key_value = $1 AND active = TRUE",
             [hashKey(apiKey)]
         );
 
@@ -40,25 +40,38 @@ async function apiKeyAuth(req, res, next) {
         const today = getTodayString();
         const month = getMonthString();
 
-        // Reset daily/monthly counters if the date has rolled over
-        let requestsToday = keyRow.requests_today_date?.toISOString().split("T")[0] === today
-            ? keyRow.requests_today
-            : 0;
-        let requestsMonth = keyRow.requests_month_ym === month
-            ? keyRow.requests_month
-            : 0;
+        // Atomic check-and-increment: the rollover, the limit check, and the
+        // increment all happen inside ONE UPDATE's WHERE/SET, so Postgres's
+        // row lock serializes concurrent requests on the same key — no
+        // separate read-then-write gap for two requests to race through.
+        const updateResult = await pool.query(
+            `UPDATE api_keys
+             SET
+               requests_today = CASE WHEN requests_today_date = $2 THEN requests_today + 1 ELSE 1 END,
+               requests_today_date = $2,
+               requests_month = CASE WHEN requests_month_ym = $3 THEN requests_month + 1 ELSE 1 END,
+               requests_month_ym = $3,
+               total_requests = total_requests + 1,
+               last_used_at = NOW()
+             WHERE id = $1
+               AND active = TRUE
+               AND (CASE WHEN requests_today_date = $2 THEN requests_today ELSE 0 END) < daily_limit
+             RETURNING id, user_id`,
+            [keyRow.id, today, month]
+        );
 
-        // ===== Rate limit check =====
-        if (requestsToday >= keyRow.daily_limit) {
-            const newExceededCount = keyRow.limit_exceeded_count + 1;
-            const shouldDisable = newExceededCount >= 5;
-
-            await pool.query(
+        if (updateResult.rows.length === 0) {
+            // Either the limit was hit or the key got deactivated between the
+            // lookup above and now — record it atomically too.
+            const limitResult = await pool.query(
                 `UPDATE api_keys
-                 SET limit_exceeded_count = $1, active = $2
-                 WHERE id = $3`,
-                [newExceededCount, !shouldDisable, keyRow.id]
+                 SET limit_exceeded_count = limit_exceeded_count + 1,
+                     active = CASE WHEN limit_exceeded_count + 1 >= 5 THEN false ELSE active END
+                 WHERE id = $1
+                 RETURNING limit_exceeded_count, active`,
+                [keyRow.id]
             );
+            const shouldDisable = limitResult.rows[0] && !limitResult.rows[0].active;
 
             return res.status(429).json({
                 success: false,
@@ -70,21 +83,8 @@ async function apiKeyAuth(req, res, next) {
             });
         }
 
-        req.apiUser = { id: keyRow.user_id };
-        req.apiKeyId = keyRow.id;
-
-        // ===== Update usage counters =====
-        await pool.query(
-            `UPDATE api_keys
-             SET requests_today = $1,
-                 requests_today_date = $2,
-                 requests_month = $3,
-                 requests_month_ym = $4,
-                 total_requests = total_requests + 1,
-                 last_used_at = NOW()
-             WHERE id = $5`,
-            [requestsToday + 1, today, requestsMonth + 1, month, keyRow.id]
-        );
+        req.apiUser = { id: updateResult.rows[0].user_id };
+        req.apiKeyId = updateResult.rows[0].id;
 
         next();
     }

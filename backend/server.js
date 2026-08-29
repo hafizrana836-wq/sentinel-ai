@@ -1,11 +1,11 @@
 require("dotenv").config();
-console.log("[debug] CLIENT_URL is:", process.env.CLIENT_URL);
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const compression = require("compression");
+const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 
@@ -72,7 +72,8 @@ io.on("connection", (sock) => {
 });
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
+app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
+app.use(cookieParser());
 app.use(compression());
 app.use(express.json({ limit: "100kb" })); // scan/schedule payloads are tiny; cap body size
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
@@ -133,4 +134,3 @@ async function gracefulShutdown(signal) {
 }
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-// redeploy trigger

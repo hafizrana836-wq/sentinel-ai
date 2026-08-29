@@ -7,6 +7,8 @@ const { authLimiter } = require("../middleware/rateLimiter");
 const {
   register,
   login,
+  refresh,
+  logout,
   me,
   updateProfile,
   changePassword,
@@ -26,6 +28,8 @@ const {
 router.post("/auth/register", authLimiter, asyncHandler(register));
 router.post("/auth/login", authLimiter, asyncHandler(login));
 router.post("/auth/2fa/login-verify", authLimiter, asyncHandler(loginVerify2FA));
+router.post("/auth/refresh", authLimiter, asyncHandler(refresh));
+router.post("/auth/logout", requireAuth, asyncHandler(logout));
 router.get("/auth/me", requireAuth, asyncHandler(me));
 router.put("/auth/profile", requireAuth, asyncHandler(updateProfile));
 router.put("/auth/password", requireAuth, asyncHandler(changePassword));

@@ -3,15 +3,29 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Session = require("../models/Session");
-const { badRequest } = require("../utils/errors");
+const { badRequest, unauthorized } = require("../utils/errors");
 const { isValidEmail } = require("../utils/validate");
 
-function signToken(user, sessionId) {
+function signAccessToken(user, sessionId) {
   return jwt.sign(
     { sub: user.id, email: user.email, role: user.role, sid: sessionId },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "15m" }
   );
+}
+
+function signRefreshToken(userId, sessionId) {
+  return jwt.sign({ sub: userId, sid: sessionId, type: "refresh" }, process.env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+function setRefreshCookie(res, token) {
+  res.cookie("refreshToken", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth", // only sent to auth routes (refresh/logout), not every request
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 }
 
 function signPending2FAToken(userId) {
@@ -38,7 +52,8 @@ async function register(req, res, next) {
     ip: req.ip || req.connection?.remoteAddress || null,
   });
 
-  res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
+  setRefreshCookie(res, signRefreshToken(user.id, session.id));
+  res.status(201).json({ token: signAccessToken(user, session.id), user: publicUser(user) });
 }
 
 async function login(req, res, next) {
@@ -58,7 +73,8 @@ async function login(req, res, next) {
     ip: req.ip || req.connection?.remoteAddress || null,
   });
 
-  res.json({ token: signToken(user, session.id), user: publicUser(user) });
+  setRefreshCookie(res, signRefreshToken(user.id, session.id));
+  res.json({ token: signAccessToken(user, session.id), user: publicUser(user) });
 }
 
 async function me(req, res, next) {
@@ -121,6 +137,37 @@ async function deleteAccount(req, res) {
   res.status(204).end();
 }
 
+async function refresh(req, res, next) {
+  const token = req.cookies?.refreshToken;
+  if (!token) return next(unauthorized("No refresh token"));
+
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    res.clearCookie("refreshToken", { path: "/api/auth" });
+    return next(unauthorized("Invalid or expired refresh token"));
+  }
+  if (payload.type !== "refresh") return next(unauthorized("Invalid refresh token"));
+
+  const active = await Session.isActive(payload.sid, payload.sub);
+  if (!active) {
+    res.clearCookie("refreshToken", { path: "/api/auth" });
+    return next(unauthorized("Session revoked"));
+  }
+
+  const user = await User.findById(payload.sub);
+  if (!user) return next(unauthorized("User no longer exists"));
+
+  res.json({ token: signAccessToken(user, payload.sid) });
+}
+
+async function logout(req, res) {
+  if (req.sessionId) await Session.revoke(req.sessionId, req.user.id);
+  res.clearCookie("refreshToken", { path: "/api/auth" });
+  res.status(204).end();
+}
+
 async function listSessions(req, res) {
   const sessions = await Session.findAllForUser(req.user.id);
   res.json({ sessions });
@@ -134,6 +181,8 @@ async function revokeSession(req, res) {
 module.exports = {
   register,
   login,
+  refresh,
+  logout,
   me,
   updateProfile,
   changePassword,
