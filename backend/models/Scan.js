@@ -23,25 +23,14 @@ function toJsonb(value) {
   return value === undefined || value === null ? null : JSON.stringify(value);
 }
 
-/**
- * status defaults to 'running' (dashboard scans start their pipeline
- * immediately). The public API creates scans as 'queued' and flips them to
- * 'running' via markRunning() once a worker slot actually picks the job up
- * — see utils/scanQueue.js.
- */
-async function create({ target, ownerId, status = "running" }) {
+async function create({ target, ownerId }) {
   const { rows } = await db.query(
     `INSERT INTO scans (target, owner_id, status)
-     VALUES ($1, $2, $3)
+     VALUES ($1, $2, 'running')
      RETURNING ${SCAN_COLUMNS}`,
-    [target, ownerId, status]
+    [target, ownerId]
   );
   return rows[0];
-}
-
-/** Flips a queued scan to running once the pipeline actually starts. Idempotent/no-op for scans already running. */
-async function markRunning(id) {
-  await db.query(`UPDATE scans SET status = 'running' WHERE id = $1 AND status = 'queued'`, [id]);
 }
 
 /**
@@ -229,6 +218,15 @@ async function queueCount() {
   return rows[0].count;
 }
 
+/** How many of this owner's own scans are currently queued/running — used to cap concurrency. */
+async function activeCountForOwner(ownerId) {
+  const { rows } = await db.queryWithRetry(
+    `SELECT COUNT(*)::int AS count FROM scans WHERE owner_id = $1 AND status IN ('queued', 'running')`,
+    [ownerId]
+  );
+  return rows[0].count;
+}
+
 /** Status of the most recent N scans system-wide — feeds the "Scan Success" system-health metric. */
 async function recentOutcomes(limit) {
   const { rows } = await db.queryWithRetry(
@@ -297,6 +295,7 @@ module.exports = {
   activeThreatsCount,
   recentScans,
   queueCount,
+  activeCountForOwner,
   recentOutcomes,
   findAllCompletedForTrend,
   openFindingsCount,
