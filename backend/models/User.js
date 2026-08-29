@@ -76,6 +76,14 @@ async function updateScanProfile(id, profile) {
   return rows[0];
 }
 
+async function findAllWithNotificationPref(prefKey) {
+  const { rows } = await db.queryWithRetry(
+    `SELECT id, name, email FROM users WHERE notification_prefs->>$1 = 'true'`,
+    [prefKey]
+  );
+  return rows;
+}
+
 async function deleteAccount(id) {
   await db.query(`DELETE FROM users WHERE id = $1`, [id]);
 }
@@ -128,4 +136,5 @@ module.exports = {
   enableTwoFactor,
   disableTwoFactor,
   findByIdWithTwoFactorSecret,
+  findAllWithNotificationPref,
 };

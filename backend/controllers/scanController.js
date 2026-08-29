@@ -1,5 +1,6 @@
 // Place this file at: controllers/scanController.js
 const Scan = require("../models/Scan");
+const User = require("../models/User");
 const { checkSSL } = require("../services/sslService");
 const { checkHeaders } = require("../services/headerService");
 const { checkDNS } = require("../services/dnsService");
@@ -183,7 +184,12 @@ async function runScanPipeline(scanId, hostname, ownerId, lookup) {
     // it's time to refetch stats/recent-scans.
     emitUserUpdate(ownerId, "scan:completed", { scanId, target: scan.target });
 
-    await sendCriticalAlert(scan);
+    try {
+      const owner = await User.findById(ownerId);
+      await sendCriticalAlert(scan, owner);
+    } catch (err) {
+      console.error("[scan] critical-alert email failed:", err.message);
+    }
   } catch (err) {
     await Scan.markFailed(scanId, err.message);
     emitProgress(scanId, "Error", "failed", { error: err.message });
